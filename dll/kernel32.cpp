@@ -2,6 +2,7 @@
 #include "files.h"
 #include "processes.h"
 #include "handles.h"
+#include "alloc.h"
 #include <algorithm>
 #include <cstdlib>
 #include <ctype.h>
@@ -9,7 +10,6 @@
 #include <fnmatch.h>
 #include <string>
 #include "strutil.h"
-#include <malloc.h>
 #include <stdarg.h>
 #include <system_error>
 #include <sys/mman.h>
@@ -43,9 +43,9 @@ namespace kernel32 {
 	static void *doAlloc(unsigned int dwBytes, bool zero) {
 		if (dwBytes == 0)
 			dwBytes = 1;
-		void *ret = malloc(dwBytes);
+		void *ret = alloc::alloc(dwBytes);
 		if (ret && zero) {
-			memset(ret, 0, malloc_usable_size(ret));
+			memset(ret, 0, alloc::usableSize(ret));
 		}
 		return ret;
 	}
@@ -53,9 +53,9 @@ namespace kernel32 {
 	static void *doRealloc(void *mem, unsigned int dwBytes, bool zero) {
 		if (dwBytes == 0)
 			dwBytes = 1;
-		size_t oldSize = malloc_usable_size(mem);
-		void *ret = realloc(mem, dwBytes);
-		size_t newSize = malloc_usable_size(ret);
+		size_t oldSize = alloc::usableSize(mem);
+		void *ret = alloc::realloc(mem, dwBytes);
+		size_t newSize = alloc::usableSize(ret);
 		if (ret && zero && newSize > oldSize) {
 			memset((char*)ret + oldSize, 0, newSize - oldSize);
 		}
@@ -422,7 +422,7 @@ namespace kernel32 {
 		}
 	}
 	void *WIN_FUNC GlobalFree(void *hMem) {
-		free(hMem);
+		alloc::free(hMem);
 		return 0;
 	}
 
@@ -448,7 +448,7 @@ namespace kernel32 {
 	}
 
 	LPWSTR WIN_FUNC GetCommandLineW() {
-		DEBUG_LOG("GetCommandLineW -> ");
+		DEBUG_LOG("GetCommandLineW\n");
 		return wibo::commandLineW.data();
 	}
 
@@ -1453,8 +1453,7 @@ namespace kernel32 {
 		if (flAllocationType & 0x2000 || lpAddress == NULL) { // MEM_RESERVE
 			// do this for now...
 			assert(lpAddress == NULL);
-			void *mem = 0;
-			posix_memalign(&mem, 0x1000, dwSize);
+			void *mem = alloc::memalign(0x1000, dwSize);
 			memset(mem, 0, dwSize);
 
 			// Windows only fences off the lower 2GB of the 32-bit address space for the private use of processes.
@@ -1694,7 +1693,7 @@ namespace kernel32 {
 
 	unsigned int WIN_FUNC HeapSize(void *hHeap, unsigned int dwFlags, void *lpMem) {
 		DEBUG_LOG("HeapSize(heap=%p, flags=%x, mem=%p)\n", hHeap, dwFlags, lpMem);
-		return malloc_usable_size(lpMem);
+		return alloc::usableSize(lpMem);
 	}
 
 	void *WIN_FUNC GetProcessHeap() {
@@ -1709,7 +1708,7 @@ namespace kernel32 {
 
 	unsigned int WIN_FUNC HeapFree(void *hHeap, unsigned int dwFlags, void *lpMem) {
 		DEBUG_LOG("HeapFree(heap=%p, flags=%x, mem=%p)\n", hHeap, dwFlags, lpMem);
-		free(lpMem);
+		alloc::free(lpMem);
 		return 1;
 	}
 
